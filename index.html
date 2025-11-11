@@ -2,213 +2,53 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>F/D Rate — Demo</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>F/D Rate (JS)</title>
   <style>
-    body { font-family: Arial, Helvetica, sans-serif; margin: 12px; background: #f7f7f7; color:#222 }
-    .container { display:flex; gap:16px; }
-    .panel { width:320px; background:#fff; padding:12px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,0.08)}
-    label { display:block; margin-top:8px; font-size:13px }
-    input[type=number], select { width:100%; padding:6px; font-size:14px; margin-top:4px }
-    input[type=range] { width:100% }
-    canvas { background:#fff; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,0.08) }
-    .small { font-size:12px; color:#555 }
-    .value { font-weight:600 }
+    body{font-family:Segoe UI, Roboto, Arial; margin:12px; background:#f0f0f0}
+    .container{display:flex;gap:12px}
+    .panel{width:320px;background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+    .plot{flex:1; background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+    label{display:block;font-size:13px;margin-top:8px}
+    input[type=range]{width:180px}
+    .row{display:flex;align-items:center;gap:8px}
+    .val{width:70px}
+    select,input[type=text]{padding:6px;border-radius:4px;border:1px solid #ccc}
+    button{padding:7px 10px;border-radius:4px;border:0;background:#0078d7;color:white;cursor:pointer}
+    canvas{width:100%;height:420px;background:#fff;border-radius:6px}
+    .small{font-size:12px;color:#444}
   </style>
 </head>
 <body>
   <h2>F/D Rate</h2>
   <div class="container">
     <div class="panel">
-      <label>IBD L (mm)
-        <input id="L" type="number" step="0.1" min="0" max="50" value="7.0">
-      </label>
+      <div class="row"><label style="flex:1">IBD L (mm):</label><input id="L" class="val" type="text" /><input id="L_range" type="range" min="0" max="50" step="0.1" /></div>
+      <div class="row"><label style="flex:1">Force (g):</label><input id="F" class="val" type="text" /><input id="F_range" type="range" min="0" max="500" step="0.1" /></div>
+      <div class="row"><label style="flex:1">Deflection (mm):</label><input id="D" class="val" type="text" /><input id="D_range" type="range" min="0" max="50" step="0.1" /></div>
+      <label>Material:</label>
+      <select id="material"></select>
+      <div class="row"><label style="flex:1">E (GPa):</label><input id="E" class="val" type="text" /><input id="E_range" type="range" min="14.5" max="207" step="0.1" /></div>
+      <label>Cross Section:</label>
+      <select id="cross"></select>
+      <div class="row"><label style="flex:1">I (m⁴ × 10⁻¹⁵):</label><input id="I" class="val" type="text" /><input id="I_range" type="range" min="0.13" max="10.34" step="0.01" /></div>
 
-      <label>Force (g)
-        <input id="F" type="number" step="0.1" min="0" max="500" value="100.0">
-      </label>
-
-      <!-- Deflection input removed per request -->
-
-      <label>Material
-        <select id="material"></select>
-      </label>
-
-      <label>E (GPa)
-        <input id="E" type="number" step="0.1" min="14.5" max="207" value="207.0">
-      </label>
-
-      <label>Cross Section
-        <select id="cross"></select>
-      </label>
-
-      <label>I (m⁴ × 10⁻¹⁵)
-        <input id="I" type="number" step="0.01" min="0.13" max="10.34" value="1.34">
-      </label>
-
-  <p class="small">F/Δ (g/mm): <span id="fdr" class="value">—</span></p>
-
+      <div style="margin-top:12px;display:flex;gap:8px">
+        <button id="reset">Reset</button>
+        <button id="export">Export CSV</button>
+        <label style="margin-left:auto" class="small">Show Equation <input id="showEq" type="checkbox" checked /></label>
+      </div>
     </div>
 
-    <div style="flex:1">
-      <canvas id="plot" width="800" height="480"></canvas>
+    <div class="plot">
+  <canvas id="plotCanvas"></canvas>
+      <div style="display:flex;justify-content:space-between;margin-top:8px">
+        <div id="F_D_rate" class="small"></div>
+        <div id="moment" class="small"></div>
+      </div>
     </div>
   </div>
 
-  <script src="./test1.js"></script>
-  <script>
-    // Ensure FD helpers are available
-    const FD = window.FD;
-    if (!FD) {
-      document.body.innerHTML = '<p style="color:red">FD functions not available. Make sure <code>test1.js</code> is next to this file and loaded.</p>';
-      throw new Error('FD not available');
-    }
-
-    const el = id => document.getElementById(id);
-  const L_in = el('L');
-  const F_in = el('F');
-  const E_in = el('E');
-    const I_in = el('I');
-    const cross_sel = el('cross');
-    const mat_sel = el('material');
-    const fdr_span = el('fdr');
-    const canvas = el('plot');
-  const ctx = canvas.getContext('2d');
-
-    function populateSelects() {
-      // materials
-      Object.keys(FD.MATERIAL_E_RANGES).forEach(name => {
-        const opt = document.createElement('option'); opt.value = name; opt.textContent = name; mat_sel.appendChild(opt);
-      });
-      mat_sel.value = 'Stainless Steel';
-      // cross sections
-      Object.keys(FD.CROSS_SECTIONS).forEach(name => {
-        const opt = document.createElement('option'); opt.value = name; opt.textContent = name; cross_sel.appendChild(opt);
-      });
-      cross_sel.value = '0.016 Round';
-      I_in.value = FD.CROSS_SECTIONS[cross_sel.value];
-    }
-
-    function drawPlot() {
-      const L = Number(L_in.value) || 0;
-      const F = Number(F_in.value) || 0;
-      const E = Number(E_in.value) || 0;
-      const I = Number(I_in.value) || 0;
-
-      const { x_mm, deflection_mm } = FD.calculateCantileverDeflection(L, F, E, I, 200);
-
-      // clear
-      ctx.clearRect(0,0,canvas.width, canvas.height);
-      // margins
-      const m = { l:50, r:20, t:30, b:50 };
-      const w = canvas.width - m.l - m.r;
-      const h = canvas.height - m.t - m.b;
-
-      // axes
-      ctx.strokeStyle = '#aaa'; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(m.l, m.t + h); ctx.lineTo(m.l + w, m.t + h); ctx.stroke(); // x axis
-      ctx.beginPath(); ctx.moveTo(m.l, m.t); ctx.lineTo(m.l, m.t + h); ctx.stroke(); // y axis
-
-      // find ranges
-      const xMax = Math.max(50, L);
-      const yMax = Math.max(1, ...Array.from(deflection_mm));
-
-      // draw grid ticks
-      ctx.fillStyle = '#333'; ctx.font = '12px sans-serif';
-      for (let xi = 0; xi <= 5; xi++) {
-        const xv = xi * xMax / 5;
-        const sx = m.l + (xv / xMax) * w;
-        ctx.strokeStyle = '#eee'; ctx.beginPath(); ctx.moveTo(sx, m.t); ctx.lineTo(sx, m.t + h); ctx.stroke();
-        ctx.fillText(xv.toFixed(0), sx-8, m.t + h + 18);
-      }
-      for (let yi = 0; yi <= 5; yi++) {
-        const yv = yi * yMax / 5;
-        const sy = m.t + h - (yv / yMax) * h;
-        ctx.strokeStyle = '#eee'; ctx.beginPath(); ctx.moveTo(m.l, sy); ctx.lineTo(m.l + w, sy); ctx.stroke();
-        // draw y tick labels to the left of the axis, right-aligned
-        ctx.textAlign = 'right';
-        ctx.fillText(yv.toFixed(1), m.l - 8, sy + 4);
-      }
-
-      // plot deflection
-      ctx.beginPath();
-      for (let i = 0; i < x_mm.length; i++) {
-        const sx = m.l + (x_mm[i] / xMax) * w;
-        const sy = m.t + h - (deflection_mm[i] / yMax) * h;
-        if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
-      }
-      // set line width based on selected cross-section inertia (I)
-      try {
-        const csVals = Object.values(FD.CROSS_SECTIONS).map(v => Number(v));
-        const minI = Math.min(...csVals);
-        const maxI = Math.max(...csVals);
-        let t = 0;
-        if (maxI > minI) t = (Number(I) - minI) / (maxI - minI);
-        t = Math.max(0, Math.min(1, t));
-        // perceptual mapping: sqrt for better visual spacing, scale to [1..7]
-        const lineWidth = 1 + Math.sqrt(t) * 6;
-        ctx.lineWidth = lineWidth;
-      } catch (err) {
-        // fallback
-        ctx.lineWidth = 3;
-      }
-      // use FD color mapping so wire color updates with E
-      ctx.strokeStyle = FD.colorForE(E);
-      ctx.stroke();
-
-      // annotate max deflection
-      const maxIdx = deflection_mm.reduce((maxI, v, i, arr) => v > arr[maxI] ? i : maxI, 0);
-      const mx = m.l + (x_mm[maxIdx] / xMax) * w;
-      const my = m.t + h - (deflection_mm[maxIdx] / yMax) * h;
-      ctx.fillStyle = '#000'; ctx.font = '12px sans-serif';
-      ctx.fillText(`Δ=${deflection_mm[maxIdx].toFixed(2)} mm`, mx + 6, my);
-
-  // compute and show F/Δ
-  const fdr = FD.calculateFDrate(L, E, I);
-  fdr_span.textContent = Number(fdr).toFixed(2);
-
-  // Axis labels
-  ctx.fillStyle = '#333';
-  ctx.font = '14px sans-serif';
-  // x-axis label (centered)
-  ctx.textAlign = 'center';
-  ctx.fillText('L (mm)', m.l + w / 2, m.t + h + 36);
-  // y-axis label (rotated, centered along axis)
-  ctx.save();
-  // place the rotated y-label further left so it doesn't overlap tick numbers
-  ctx.translate(m.l - 36, m.t + h / 2);
-  ctx.rotate(-Math.PI / 2);
-  ctx.textAlign = 'center';
-  ctx.fillText('Deflection (mm)', 0, 0);
-  ctx.restore();
-
-    }
-
-    function wireEvents() {
-      const elems = [L_in, F_in, E_in, I_in, cross_sel, mat_sel];
-      // listen for both 'input' and 'change' so selects update reliably across browsers
-      elems.forEach(elm => {
-        ['input', 'change'].forEach(evt => {
-          elm.addEventListener(evt, () => {
-            // when cross selection changed, update I
-            if (elm === cross_sel) {
-              I_in.value = FD.CROSS_SECTIONS[cross_sel.value] || I_in.value;
-            }
-            // when material selected, set default E
-            if (elm === mat_sel) {
-              const def = FD.MATERIAL_DEFAULT_E[mat_sel.value];
-              if (def !== undefined) E_in.value = def;
-            }
-            drawPlot();
-          });
-        });
-      });
-    }
-
-    populateSelects();
-    wireEvents();
-    drawPlot();
-
-  </script>
+  <script src="FD_rate_7.11.js"></script>
 </body>
 </html>
