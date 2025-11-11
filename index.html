@@ -137,9 +137,23 @@
         const sy = m.t + h - (deflection_mm[i] / yMax) * h;
         if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
       }
-  ctx.lineWidth = 3;
-  // use FD color mapping so wire color updates with E
-  ctx.strokeStyle = FD.colorForE(E);
+      // set line width based on selected cross-section inertia (I)
+      try {
+        const csVals = Object.values(FD.CROSS_SECTIONS).map(v => Number(v));
+        const minI = Math.min(...csVals);
+        const maxI = Math.max(...csVals);
+        let t = 0;
+        if (maxI > minI) t = (Number(I) - minI) / (maxI - minI);
+        t = Math.max(0, Math.min(1, t));
+        // perceptual mapping: sqrt for better visual spacing, scale to [1..7]
+        const lineWidth = 1 + Math.sqrt(t) * 6;
+        ctx.lineWidth = lineWidth;
+      } catch (err) {
+        // fallback
+        ctx.lineWidth = 3;
+      }
+      // use FD color mapping so wire color updates with E
+      ctx.strokeStyle = FD.colorForE(E);
       ctx.stroke();
 
       // annotate max deflection
@@ -171,18 +185,22 @@
     }
 
     function wireEvents() {
-      [L_in, F_in, E_in, I_in, cross_sel, mat_sel].forEach(elm => {
-        elm.addEventListener('input', () => {
-          // when cross selection changed, update I
-          if (elm === cross_sel) {
-            I_in.value = FD.CROSS_SECTIONS[cross_sel.value] || I_in.value;
-          }
-          // when material selected, set default E
-          if (elm === mat_sel) {
-            const def = FD.MATERIAL_DEFAULT_E[mat_sel.value];
-            if (def !== undefined) E_in.value = def;
-          }
-          drawPlot();
+      const elems = [L_in, F_in, E_in, I_in, cross_sel, mat_sel];
+      // listen for both 'input' and 'change' so selects update reliably across browsers
+      elems.forEach(elm => {
+        ['input', 'change'].forEach(evt => {
+          elm.addEventListener(evt, () => {
+            // when cross selection changed, update I
+            if (elm === cross_sel) {
+              I_in.value = FD.CROSS_SECTIONS[cross_sel.value] || I_in.value;
+            }
+            // when material selected, set default E
+            if (elm === mat_sel) {
+              const def = FD.MATERIAL_DEFAULT_E[mat_sel.value];
+              if (def !== undefined) E_in.value = def;
+            }
+            drawPlot();
+          });
         });
       });
     }
