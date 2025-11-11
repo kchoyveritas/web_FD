@@ -46,8 +46,7 @@
         <input id="I" type="number" step="0.01" min="0.13" max="10.34" value="1.34">
       </label>
 
-      <p class="small">F/Δ (g/mm): <span id="fdr" class="value">—</span></p>
-      <p class="small">Color for E: <span id="color" class="value">—</span></p>
+  <p class="small">F/Δ (g/mm): <span id="fdr" class="value">—</span></p>
 
     </div>
 
@@ -73,9 +72,8 @@
     const cross_sel = el('cross');
     const mat_sel = el('material');
     const fdr_span = el('fdr');
-    const color_span = el('color');
     const canvas = el('plot');
-    const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d');
 
     function populateSelects() {
       // materials
@@ -127,7 +125,9 @@
         const yv = yi * yMax / 5;
         const sy = m.t + h - (yv / yMax) * h;
         ctx.strokeStyle = '#eee'; ctx.beginPath(); ctx.moveTo(m.l, sy); ctx.lineTo(m.l + w, sy); ctx.stroke();
-        ctx.fillText(yv.toFixed(1), 6, sy+4);
+        // draw y tick labels to the left of the axis, right-aligned
+        ctx.textAlign = 'right';
+        ctx.fillText(yv.toFixed(1), m.l - 8, sy + 4);
       }
 
       // plot deflection
@@ -137,8 +137,9 @@
         const sy = m.t + h - (deflection_mm[i] / yMax) * h;
         if (i === 0) ctx.moveTo(sx, sy); else ctx.lineTo(sx, sy);
       }
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = FD.colorForE(E);
+  ctx.lineWidth = 3;
+  // use FD color mapping so wire color updates with E
+  ctx.strokeStyle = FD.colorForE(E);
       ctx.stroke();
 
       // annotate max deflection
@@ -148,14 +149,24 @@
       ctx.fillStyle = '#000'; ctx.font = '12px sans-serif';
       ctx.fillText(`Δ=${deflection_mm[maxIdx].toFixed(2)} mm`, mx + 6, my);
 
-      // compute and show F/Δ
-      const fdr = FD.calculateFDrate(L, E, I);
-      fdr_span.textContent = Number(fdr).toFixed(2);
-      color_span.textContent = FD.colorForE(E);
-      color_span.style.background = FD.colorForE(E);
-      color_span.style.padding = '2px 6px';
-      color_span.style.borderRadius = '4px';
-      color_span.style.color = '#fff';
+  // compute and show F/Δ
+  const fdr = FD.calculateFDrate(L, E, I);
+  fdr_span.textContent = Number(fdr).toFixed(2);
+
+  // Axis labels
+  ctx.fillStyle = '#333';
+  ctx.font = '14px sans-serif';
+  // x-axis label (centered)
+  ctx.textAlign = 'center';
+  ctx.fillText('L (mm)', m.l + w / 2, m.t + h + 36);
+  // y-axis label (rotated, centered along axis)
+  ctx.save();
+  // place the rotated y-label further left so it doesn't overlap tick numbers
+  ctx.translate(m.l - 36, m.t + h / 2);
+  ctx.rotate(-Math.PI / 2);
+  ctx.textAlign = 'center';
+  ctx.fillText('Deflection (mm)', 0, 0);
+  ctx.restore();
 
     }
 
