@@ -156,6 +156,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   const F_D_rate_el = el('F_D_rate');
   const moment_el = el('moment');
 
+  // immediate redraw when toggling the show-equation checkbox
+  showEq.addEventListener('change', ()=>{ schedulePlot(); });
+
   // populate selects
   Object.keys(MATERIAL_E_RANGES).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; mat.appendChild(o); });
   Object.keys(CROSS_SECTIONS).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; cross.appendChild(o); });
