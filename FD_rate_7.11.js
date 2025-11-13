@@ -156,6 +156,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   const F_D_rate_el = el('F_D_rate');
   const moment_el = el('moment');
 
+  // immediate redraw when toggling the show-equation checkbox
+  showEq.addEventListener('change', ()=>{ schedulePlot(); });
+
   // populate selects
   Object.keys(MATERIAL_E_RANGES).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; mat.appendChild(o); });
   Object.keys(CROSS_SECTIONS).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; cross.appendChild(o); });
@@ -253,7 +256,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const fd = computeFDRate(L_mm, E_GPa, I_v);
   F_D_rate_el.textContent = isFinite(fd)?`F/Δ= ${fd.toFixed(1)} g/mm`:'F/Δ= N/A';
     // Moment estimate
-    const M_gmm = F_g * L_mm; moment_el.textContent = `M ≈ ${M_gmm.toFixed(1)} g·mm`;
+    const M_gmm = F_g * L_mm; moment_el.textContent = `M = ${M_gmm.toFixed(1)} g·mm`;
     // Show equation if requested
   if(showEq.checked){ try{ const coeffs = polyfit(data.x, data.y, 3); const eq = formatEquation(coeffs); ctx.fillStyle='#222'; ctx.font='12px Arial'; ctx.textAlign='left'; ctx.fillText(eq, originX, 40); }catch(e){} }
   }
