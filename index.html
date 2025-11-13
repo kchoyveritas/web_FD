@@ -3,61 +3,20 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>F/D Rate</title>
+  <title>F/D Rate (JS)</title>
   <style>
-    /* Global box sizing and base */
-    *,*::before,*::after{box-sizing:border-box}
-    html,body{max-width:100%;overflow-x:hidden}
-    body{font-family:Segoe UI, Roboto, Arial; margin:10px; background:#f0f0f0;-webkit-font-smoothing:antialiased}
-
-    /* Layout container: allow wrapping so very narrow screens don't force overflow */
-    .container{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap}
-
-    /* Panel: prefer ~320px but able to shrink; min-width:0 avoids flex overflow issues */
-    .panel{flex:0 1 300px;min-width:0;background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
-
-    /* Plot expands to fill remaining area but can shrink when wrapped */
-    .plot{flex:1 1 0;min-width:0;background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
-
+    body{font-family:Segoe UI, Roboto, Arial; margin:12px; background:#f0f0f0}
+    .container{display:flex;gap:12px}
+    .panel{width:320px;background:#fff;padding:12px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+    .plot{flex:1; background:#fff;padding:8px;border-radius:6px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
     label{display:block;font-size:13px;margin-top:8px}
-    input[type=range]{width:180px;max-width:100%}
+    input[type=range]{width:180px}
     .row{display:flex;align-items:center;gap:8px}
-    .val{width:70px;max-width:40%}
-    select,input[type=text]{padding:6px;border-radius:4px;border:1px solid #ccc;max-width:100%}
+    .val{width:70px}
+    select,input[type=text]{padding:6px;border-radius:4px;border:1px solid #ccc}
     button{padding:7px 10px;border-radius:4px;border:0;background:#0078d7;color:white;cursor:pointer}
-
-    /* Canvas should fill its container width and be block-level to avoid inline whitespace issues */
-    canvas{width:100%;height:420px;max-width:100%;background:#fff;border-radius:6px;display:block}
+    canvas{width:100%;height:420px;background:#fff;border-radius:6px}
     .small{font-size:12px;color:#444}
-
-    /* Medium/small screens: stack controls and plot vertically for narrow widths */
-    @media (max-width: 760px) {
-      .container { flex-direction: column; }
-      .panel { width: 100%; }
-      .plot { width: 100%; margin-top: 12px; }
-      canvas { height: 320px; }
-      body { margin:8px; }
-    }
-
-    /* Very small screens: stack each input row vertically to avoid horizontal scrolling */
-    @media (max-width: 480px) {
-      .panel { padding:8px; }
-      .row { flex-direction: column; align-items:stretch; gap:6px }
-      .row > label { margin:0; }
-      .row > input.val { width:100%; }
-      .row > input[type=range] { width:100%; }
-      .val{width:100%;}
-      input[type=range]{max-width:100%}
-      canvas { height:260px; }
-    }
-
-    /* Tiny devices: reduce gaps and font-size slightly */
-    @media (max-width: 360px) {
-      .container { gap:8px }
-      label{font-size:12px}
-      .small{font-size:11px}
-      canvas { height:240px }
-    }
   </style>
 </head>
 <body>
