@@ -39,15 +39,12 @@
       body { margin:8px; }
     }
 
-    /* Very small screens: stack each input row vertically to avoid horizontal scrolling */
+    /* Very small screens: keep rows horizontal but adjust sizes */
     @media (max-width: 480px) {
       .panel { padding:8px; }
-      .row { flex-direction: column; align-items:stretch; gap:6px }
-      .row > label { margin:0; }
-      .row > input.val { width:100%; }
-      .row > input[type=range] { width:100%; }
-      .val{width:100%;}
-      input[type=range]{max-width:100%}
+      .row > label { margin:0; font-size:12px; }
+      .val{width:60px;}
+      input[type=range]{flex:1;}
       canvas { height:260px; }
     }
 
