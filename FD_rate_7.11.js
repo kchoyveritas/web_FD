@@ -155,9 +155,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
   const showEq = el('showEq');
   const F_D_rate_el = el('F_D_rate');
   const moment_el = el('moment');
+  const eqDisplay = el('eq_display');
 
   // immediate redraw when toggling the show-equation checkbox
-  showEq.addEventListener('change', ()=>{ schedulePlot(); });
+  showEq.addEventListener('change', ()=>{ schedulePlot(); // show/hide eq display will be handled in renderPlot
+  });
 
   // populate selects
   Object.keys(MATERIAL_E_RANGES).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; mat.appendChild(o); });
@@ -189,11 +191,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
   function updateFromL(){ Lr.value = L.value; schedulePlot(); }
   function updateFromF(){ Fr.value = F.value; // when force changed, recompute deflection
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), F_g=Number(F.value);
-    if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const F_N=F_g*0.00981; const delta_m = F_N * L_m**3 / (3*E_GPa*1e9*I_v*1e-15); D.value = (delta_m*1000).toFixed(3); Dr.value = D.value; }
+    if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const F_N=F_g*0.00981; const delta_m = F_N * L_m**3 / (3*E_GPa*1e9*I_v*1e-15); D.value = (delta_m*1000).toFixed(1); Dr.value = D.value; }
     schedulePlot(); }
   function updateFromD(){ Dr.value = D.value; // when deflection changed compute force
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), delta_mm=Number(D.value);
-    if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const delta_m = delta_mm/1000; const F_N = delta_m * 3*E_GPa*1e9*I_v*1e-15 / (L_m**3); const F_g=F_N/0.00981; F.value=F_g.toFixed(3); Fr.value=F.value; }
+    if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const delta_m = delta_mm/1000; const F_N = delta_m * 3*E_GPa*1e9*I_v*1e-15 / (L_m**3); const F_g=F_N/0.00981; F.value=F_g.toFixed(1); Fr.value=F.value; }
     schedulePlot(); }
   // When E is changed directly (slider/input), treat the material as "Custom"
   // so the user sees that the E value no longer matches the preset materials.
@@ -209,7 +211,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       const F_N = F_g * 0.00981;
       const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
       const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(3);
+      D.value = delta_mm.toFixed(1);
       Dr.value = D.value;
     }
     schedulePlot();
@@ -228,7 +230,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
       const F_N = F_g * 0.00981;
       const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
       const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(3);
+      D.value = delta_mm.toFixed(1);
       Dr.value = D.value;
     }
     schedulePlot();
@@ -302,42 +304,59 @@ window.addEventListener('DOMContentLoaded', ()=>{
     ctx.beginPath(); ctx.lineWidth = lw; ctx.strokeStyle = mapEtoColor(E_GPa);
   for(let i=0;i<data.x.length;i++){ const px = originX + (data.x[i]/50)*plotW; const py = originY - (data.y[i]/Math.max(maxY,30))*plotH; if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
   ctx.stroke();
-    // annotate max
-    const idx = data.y.indexOf(Math.max(...data.y)); const mx = originX + (data.x[idx]/50)*plotW; const my = originY - (data.y[idx]/Math.max(maxY,30))*plotH;
-  if(F_g>0){
-    ctx.fillStyle='#0000ff';
-    ctx.font='14px Arial';
-    ctx.textAlign='center';
-    // arrow marker near the plotted max point
-    ctx.fillText('↑', mx, my-12);
-    // force value (centered)
-    const forceText = `${Number(F_g).toFixed(1)} g`;
-    ctx.fillStyle = '#0000ff';
-    ctx.font = '14px Arial';
-    ctx.textAlign = 'center';
-    ctx.fillText(forceText, mx, my-28);
-    // deflection value in parentheses to the right of the force value
-    try{
-      const defVal = parseFloat(D.value);
-  const defStr = isFinite(defVal) ? `${defVal.toFixed(1)} mm` : 'N/A';
-      const defText = `(${defStr})`;
-      // measure force text width to position deflection to the right
+    // annotate max (keep label inside canvas)
+    const idx = data.y.indexOf(Math.max(...data.y));
+    const mx = originX + (data.x[idx]/50)*plotW;
+    const my = originY - (data.y[idx]/Math.max(maxY,30))*plotH;
+    if (F_g > 0) {
+      const forceText = `${Number(F_g).toFixed(1)} g`;
+      let defText = 'N/A';
+      try { const defVal = parseFloat(D.value); defText = isFinite(defVal) ? `(${defVal.toFixed(1)} mm)` : 'N/A'; } catch(e){}
+      // measure widths
       ctx.font = '14px Arial';
       const fw = ctx.measureText(forceText).width;
       ctx.font = '12px Arial';
-      ctx.fillStyle = '#000';
-      ctx.textAlign = 'left';
-      // start a few pixels after the end of the force text
-      ctx.fillText(defText, mx + fw/2 + 6, my-28);
-    }catch(e){}
-  }
+      const dw = ctx.measureText(defText).width;
+      const spacing = 6;
+      const textW = fw + spacing + dw;
+      const half = textW / 2;
+      // clamp horizontal center within plot area
+      const minCenterX = originX + 4 + half;
+      const maxCenterX = originX + plotW - 4 - half;
+      const centerX = Math.max(minCenterX, Math.min(mx, maxCenterX));
+      // vertical placement: prefer above the point, else below, clamp to plot vertical bounds
+      const aboveY = my - 28;
+      const textH = 18; // approx
+      let textY = aboveY;
+      const topLimit = M_TOP + 4;
+      const bottomLimit = originY - 4 - textH;
+      if (textY < topLimit) {
+        textY = my + 8; // place below
+        if (textY > bottomLimit) textY = bottomLimit;
+      }
+      // draw arrow marker near the plotted max point but clamp vertically so it's visible
+      const arrowY = Math.max(M_TOP + 4, Math.min(my - 12, originY - 4));
+      ctx.fillStyle = '#0000ff'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.fillText('↑', mx, arrowY);
+      // draw force (centered) and deflection (to the right) at clamped position
+      ctx.fillStyle = '#0000ff'; ctx.font = '14px Arial'; ctx.textAlign = 'center'; ctx.fillText(forceText, centerX, textY);
+      ctx.font = '12px Arial'; ctx.fillStyle = '#000'; ctx.textAlign = 'left'; ctx.fillText(defText, centerX + fw/2 + spacing, textY + 1);
+    }
     // Draw F/Δ display
     const fd = computeFDRate(L_mm, E_GPa, I_v);
   F_D_rate_el.textContent = isFinite(fd)?`F/Δ= ${fd.toFixed(1)} g/mm`:'F/Δ= N/A';
     // Moment estimate
     const M_gmm = F_g * L_mm; moment_el.textContent = `M = ${M_gmm.toFixed(1)} g·mm`;
     // Show equation if requested
-  if(showEq.checked){ try{ const coeffs = polyfit(data.x, data.y, 3); const eq = formatEquation(coeffs); ctx.fillStyle='#222'; ctx.font='12px Arial'; ctx.textAlign='left'; ctx.fillText(eq, originX, 40); }catch(e){} }
+  // Populate the equation below the checkbox (DOM) when requested
+  try{
+    const coeffs = polyfit(data.x, data.y, 3);
+    const eq = formatEquation(coeffs);
+    if (showEq.checked) {
+      if (eqDisplay) { eqDisplay.textContent = eq; eqDisplay.style.display = 'block'; }
+    } else {
+      if (eqDisplay) { eqDisplay.textContent = ''; eqDisplay.style.display = 'none'; }
+    }
+  }catch(e){ if (eqDisplay) { eqDisplay.textContent = ''; eqDisplay.style.display = 'none'; } }
   }
 
   // Export CSV
