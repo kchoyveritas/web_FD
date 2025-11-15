@@ -161,7 +161,21 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   // populate selects
   Object.keys(MATERIAL_E_RANGES).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; mat.appendChild(o); });
+  // add a 'Custom' entry (hidden) so we can mark the material as custom when the user edits E
+  // It is hidden so it does not appear in the pulldown menu but can still be selected programmatically.
+  const customOption = document.createElement('option');
+  customOption.value = 'Custom';
+  customOption.textContent = 'Custom';
+  customOption.hidden = true; // hide from the dropdown list
+  mat.appendChild(customOption);
   Object.keys(CROSS_SECTIONS).forEach(k => { const o=document.createElement('option'); o.value=k; o.textContent=k; cross.appendChild(o); });
+  // add a 'Custom' entry (hidden) so we can mark the cross-section as custom when the user edits I
+  // It is hidden so it does not appear in the pulldown menu but can still be selected programmatically.
+  const customCross = document.createElement('option');
+  customCross.value = 'Custom';
+  customCross.textContent = 'Custom';
+  customCross.hidden = true;
+  cross.appendChild(customCross);
 
   // defaults
   L.value = Lr.value = 7.0; Lr.addEventListener('input', ()=>{ L.value=Lr.value; updateFromL(); });
@@ -181,8 +195,44 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), delta_mm=Number(D.value);
     if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const delta_m = delta_mm/1000; const F_N = delta_m * 3*E_GPa*1e9*I_v*1e-15 / (L_m**3); const F_g=F_N/0.00981; F.value=F_g.toFixed(3); Fr.value=F.value; }
     schedulePlot(); }
-  function updateFromE(){ Er.value = E.value; schedulePlot(); }
-  function updateFromI(){ Ir.value = I.value; schedulePlot(); }
+  // When E is changed directly (slider/input), treat the material as "Custom"
+  // so the user sees that the E value no longer matches the preset materials.
+  // Also update the displayed deflection (D) based on current Force, L and I so
+  // the numeric D field reflects the changed stiffness.
+  function updateFromE(){
+    Er.value = E.value;
+    try{ mat.value = 'Custom'; }catch(e){}
+    // Recompute deflection D from current F, L, E, I (if possible):
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
+      const L_m = L_mm/1000;
+      const F_N = F_g * 0.00981;
+      const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_mm = delta_m * 1000;
+      D.value = delta_mm.toFixed(3);
+      Dr.value = D.value;
+    }
+    schedulePlot();
+  }
+  // When I is changed directly (slider/input), treat the cross-section as "Custom"
+  // so the user sees that the I value no longer matches the preset cross sections.
+  // Also update the displayed deflection (D) based on current Force, L and E so
+  // the numeric D field reflects the changed inertia.
+  function updateFromI(){
+    Ir.value = I.value;
+    try{ cross.value = 'Custom'; }catch(e){}
+    // Recompute deflection D from current F, L, E, I (if possible):
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
+      const L_m = L_mm/1000;
+      const F_N = F_g * 0.00981;
+      const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_mm = delta_m * 1000;
+      D.value = delta_mm.toFixed(3);
+      Dr.value = D.value;
+    }
+    schedulePlot();
+  }
 
   // text inputs commit on change/blur
   [L,F,D,E,I].forEach(inp=>{ inp.addEventListener('change', ()=>{ // clamp values to ranges
@@ -210,6 +260,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
     ctx.fillStyle='#333'; ctx.font='12px Arial'; ctx.textAlign='center';
     const xTicks = 5;
     for(let i=0;i<=xTicks;i++){ const x = M_LEFT + i*(w-M_LEFT-M_RIGHT)/xTicks; const val = Math.round((i*(50/xTicks))*10)/10; ctx.fillText(val.toString(), x, h-M_BOTTOM+18); ctx.beginPath(); ctx.moveTo(x,h-M_BOTTOM); ctx.lineTo(x,h-M_BOTTOM-4); ctx.strokeStyle='#ddd'; ctx.stroke(); }
+  // x-axis label centered under the ticks
+  ctx.font='12px Arial'; ctx.textAlign='center';
+  ctx.fillText('L (mm)', M_LEFT + (w-M_LEFT-M_RIGHT)/2, h-M_BOTTOM+36);
     // y ticks and numeric labels (show mm values)
     ctx.textAlign='right'; ctx.textBaseline='middle';
     const yTicks = 5;
@@ -251,7 +304,33 @@ window.addEventListener('DOMContentLoaded', ()=>{
   ctx.stroke();
     // annotate max
     const idx = data.y.indexOf(Math.max(...data.y)); const mx = originX + (data.x[idx]/50)*plotW; const my = originY - (data.y[idx]/Math.max(maxY,30))*plotH;
-  if(F_g>0){ ctx.fillStyle='#0000ff'; ctx.font='14px Arial'; ctx.textAlign='center'; ctx.fillText('↑', mx, my-10); ctx.fillText(`${Number(F_g).toFixed(1)} g`, mx, my-26); }
+  if(F_g>0){
+    ctx.fillStyle='#0000ff';
+    ctx.font='14px Arial';
+    ctx.textAlign='center';
+    // arrow marker near the plotted max point
+    ctx.fillText('↑', mx, my-12);
+    // force value (centered)
+    const forceText = `${Number(F_g).toFixed(1)} g`;
+    ctx.fillStyle = '#0000ff';
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText(forceText, mx, my-28);
+    // deflection value in parentheses to the right of the force value
+    try{
+      const defVal = parseFloat(D.value);
+  const defStr = isFinite(defVal) ? `${defVal.toFixed(1)} mm` : 'N/A';
+      const defText = `(${defStr})`;
+      // measure force text width to position deflection to the right
+      ctx.font = '14px Arial';
+      const fw = ctx.measureText(forceText).width;
+      ctx.font = '12px Arial';
+      ctx.fillStyle = '#000';
+      ctx.textAlign = 'left';
+      // start a few pixels after the end of the force text
+      ctx.fillText(defText, mx + fw/2 + 6, my-28);
+    }catch(e){}
+  }
     // Draw F/Δ display
     const fd = computeFDRate(L_mm, E_GPa, I_v);
   F_D_rate_el.textContent = isFinite(fd)?`F/Δ= ${fd.toFixed(1)} g/mm`:'F/Δ= N/A';
