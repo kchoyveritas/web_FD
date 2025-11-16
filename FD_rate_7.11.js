@@ -272,9 +272,39 @@ window.addEventListener('DOMContentLoaded', ()=>{
   }); });
 
   mat.addEventListener('change', ()=>{
-    const d = MATERIAL_DEFAULT_E[mat.value] || MATERIAL_E_RANGES[mat.value][1]; E.value = d; Er.value = d; schedulePlot();
+    const d = MATERIAL_DEFAULT_E[mat.value] || MATERIAL_E_RANGES[mat.value][1];
+    E.value = d;
+    Er.value = d;
+    // Recompute deflection D based on the newly selected material (E)
+    // so the numeric Deflection field reflects the changed stiffness.
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
+      const L_m = L_mm / 1000;
+      const F_N = F_g * 0.00981;
+      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_mm = delta_m * 1000;
+      D.value = delta_mm.toFixed(1);
+      Dr.value = D.value;
+    }
+    schedulePlot();
   });
-  cross.addEventListener('change', ()=>{ const v=CROSS_SECTIONS[cross.value]; I.value = v; Ir.value = v; schedulePlot(); });
+  cross.addEventListener('change', ()=>{
+    const v = CROSS_SECTIONS[cross.value];
+    I.value = v;
+    Ir.value = v;
+    // Recompute deflection D based on the newly selected cross-section (I)
+    // so the numeric Deflection field reflects the changed inertia.
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
+      const L_m = L_mm / 1000;
+      const F_N = F_g * 0.00981;
+      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_mm = delta_m * 1000;
+      D.value = delta_mm.toFixed(1);
+      Dr.value = D.value;
+    }
+    schedulePlot();
+  });
 
   function computeFDRate(L_mm, E_GPa, I_10_15){
     const L_m = L_mm/1000; if(L_m<=0 || E_GPa<=0 || I_10_15<=0) return NaN; const E_Pa = E_GPa*1e9; const I_m4 = I_10_15*1e-15; const delta_m = 1e-3; const F_N = delta_m * 3*E_Pa*I_m4 / (L_m**3); const F_g = F_N/0.00981; return F_g; }
