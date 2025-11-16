@@ -188,7 +188,21 @@ window.addEventListener('DOMContentLoaded', ()=>{
   mat.value = 'Stainless Steel'; cross.value = '0.016 Round';
 
   // Helper updates to keep UI in sync and replot
-  function updateFromL(){ Lr.value = L.value; schedulePlot(); }
+  function updateFromL(){
+    Lr.value = L.value;
+    // Recompute deflection D from current F, L, E, I so the numeric D field
+    // reflects the changed length when a force is present.
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
+      const L_m = L_mm / 1000;
+      const F_N = F_g * 0.00981;
+      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_mm = delta_m * 1000;
+      D.value = delta_mm.toFixed(1);
+      Dr.value = D.value;
+    }
+    schedulePlot();
+  }
   function updateFromF(){ Fr.value = F.value; // when force changed, recompute deflection
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), F_g=Number(F.value);
     if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const F_N=F_g*0.00981; const delta_m = F_N * L_m**3 / (3*E_GPa*1e9*I_v*1e-15); D.value = (delta_m*1000).toFixed(1); Dr.value = D.value; }
@@ -238,9 +252,24 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   // text inputs commit on change/blur
   [L,F,D,E,I].forEach(inp=>{ inp.addEventListener('change', ()=>{ // clamp values to ranges
-    const id=inp.id; if(id==='L') L.value=clamp(L.value,0,50); if(id==='F') F.value=clamp(F.value,0,500); if(id==='D') D.value=clamp(D.value,0,50); if(id==='E') E.value=clamp(E.value,14.5,207); if(id==='I') I.value=clamp(I.value,0.13,10.34); // sync ranges
-    Lr.value=L.value; Fr.value=F.value; Dr.value=D.value; Er.value=E.value; Ir.value=I.value; // recalc coupling: prefer deflection->force
-    updateFromD(); }); });
+    const id = inp.id;
+    if (id === 'L') L.value = clamp(L.value, 0, 50);
+    if (id === 'F') F.value = clamp(F.value, 0, 500);
+    if (id === 'D') D.value = clamp(D.value, 0, 50);
+    if (id === 'E') E.value = clamp(E.value, 14.5, 207);
+    if (id === 'I') I.value = clamp(I.value, 0.13, 10.34);
+    // sync ranges
+    Lr.value = L.value; Fr.value = F.value; Dr.value = D.value; Er.value = E.value; Ir.value = I.value;
+    // call the appropriate updater for the edited input
+    switch(id){
+      case 'L': updateFromL(); break;
+      case 'F': updateFromF(); break;
+      case 'D': updateFromD(); break;
+      case 'E': updateFromE(); break;
+      case 'I': updateFromI(); break;
+      default: schedulePlot();
+    }
+  }); });
 
   mat.addEventListener('change', ()=>{
     const d = MATERIAL_DEFAULT_E[mat.value] || MATERIAL_E_RANGES[mat.value][1]; E.value = d; Er.value = d; schedulePlot();
