@@ -34,6 +34,11 @@ const MATERIAL_DEFAULT_E = {
   "Nickel Titanium": 14.5
 };
 
+// Global UI limits (keep consistent across code)
+const MAX_FORCE_G = 500; // maximum force in grams
+const MAX_DEFLECTION_MM = 50; // maximum deflection in mm
+const MAX_LENGTH_MM = 50; // maximum IBD length (L) in mm
+
 function clamp(v, a, b){ const n = Number(v); if (isNaN(n)) return a; return Math.max(a, Math.min(b, n)); }
 
 function calculateCantileverDeflection(L_mm, F_g, E_GPa, I_10_15, numPoints=200){
@@ -187,29 +192,84 @@ window.addEventListener('DOMContentLoaded', ()=>{
   I.value = Ir.value = CROSS_SECTIONS['0.016 Round']; Ir.addEventListener('input', ()=>{ I.value=Ir.value; updateFromI(); });
   mat.value = 'Stainless Steel'; cross.value = '0.016 Round';
 
+  // Track last committed numeric values so we can prevent disallowed changes
+  let lastF = Number(F.value);
+  let lastD = Number(D.value);
+  let lastE = Number(E.value);
+  let lastI = Number(I.value);
+  let lastL = Number(L.value);
+
   // Helper updates to keep UI in sync and replot
   function updateFromL(){
     Lr.value = L.value;
+    // Guards for L changes:
+    // If deflection is at maximum, do not allow increasing L (would increase deflection)
+    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+    if (Number(D.value) >= MAX_DEFLECTION_MM && L_mm > lastL) {
+      // revert increase
+      L.value = lastL;
+      Lr.value = L.value;
+      schedulePlot();
+      return;
+    }
+    // If force is at maximum, do not allow decreasing L
+    if (Number(F.value) >= MAX_FORCE_G && L_mm < lastL) {
+      L.value = lastL;
+      Lr.value = L.value;
+      schedulePlot();
+      return;
+    }
     // Recompute deflection D from current F, L, E, I so the numeric D field
     // reflects the changed length when a force is present.
-    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
     if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
       const L_m = L_mm / 1000;
       const F_N = F_g * 0.00981;
-      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+      const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
       const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(1);
-      Dr.value = D.value;
+      // If the force is at the maximum, do not allow the deflection to increase above the last known value
+      if (Number(F.value) >= MAX_FORCE_G && delta_mm > lastD) {
+        // keep previous deflection
+        D.value = String(lastD.toFixed ? lastD.toFixed(1) : lastD);
+        Dr.value = D.value;
+      } else {
+        D.value = delta_mm.toFixed(1);
+        Dr.value = D.value;
+        lastD = Number(D.value);
+      }
+      // commit lastL after successful update
+      lastL = Number(L.value);
     }
     schedulePlot();
   }
   function updateFromF(){ Fr.value = F.value; // when force changed, recompute deflection
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), F_g=Number(F.value);
+    // If deflection is at maximum, disallow increasing force (which would increase deflection)
+    if (Number(D.value) >= MAX_DEFLECTION_MM && F_g > lastF) {
+      // revert the force change
+      F.value = lastF;
+      Fr.value = lastF;
+      schedulePlot();
+      return;
+    }
     if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const F_N=F_g*0.00981; const delta_m = F_N * L_m**3 / (3*E_GPa*1e9*I_v*1e-15); D.value = (delta_m*1000).toFixed(1); Dr.value = D.value; }
+    // commit last values
+    lastF = Number(F.value);
+    lastD = Number(D.value);
     schedulePlot(); }
   function updateFromD(){ Dr.value = D.value; // when deflection changed compute force
     const L_mm=Number(L.value), E_GPa=Number(E.value), I_v=Number(I.value), delta_mm=Number(D.value);
+    // If force is at maximum, do not allow deflection to increase
+    if (Number(F.value) >= MAX_FORCE_G && delta_mm > lastD) {
+      // revert the deflection change
+      D.value = lastD;
+      Dr.value = D.value;
+      schedulePlot();
+      return;
+    }
     if(L_mm>0 && E_GPa>0 && I_v>0){ const L_m=L_mm/1000; const delta_m = delta_mm/1000; const F_N = delta_m * 3*E_GPa*1e9*I_v*1e-15 / (L_m**3); const F_g=F_N/0.00981; F.value=F_g.toFixed(1); Fr.value=F.value; }
+    // commit last values
+    lastD = Number(D.value);
+    lastF = Number(F.value);
     schedulePlot(); }
   // When E is changed directly (slider/input), treat the material as "Custom"
   // so the user sees that the E value no longer matches the preset materials.
@@ -220,13 +280,26 @@ window.addEventListener('DOMContentLoaded', ()=>{
     try{ mat.value = 'Custom'; }catch(e){}
     // Recompute deflection D from current F, L, E, I (if possible):
     const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
-    if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
-      const L_m = L_mm/1000;
-      const F_N = F_g * 0.00981;
-      const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
-      const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(1);
-      Dr.value = D.value;
+    // If deflection at max, do not allow decreasing E
+    if (Number(D.value) >= MAX_DEFLECTION_MM && E_GPa < lastE) {
+      E.value = lastE;
+      Er.value = E.value;
+    }
+    // If force at max, do not allow increasing E
+    else if (Number(F.value) >= MAX_FORCE_G && E_GPa > lastE) {
+      E.value = lastE;
+      Er.value = E.value;
+    } else {
+      if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
+        const L_m = L_mm/1000;
+        const F_N = F_g * 0.00981;
+        const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+        const delta_mm = delta_m * 1000;
+        D.value = delta_mm.toFixed(1);
+        Dr.value = D.value;
+      }
+      // commit lastE after a successful change
+      lastE = Number(E.value);
     }
     schedulePlot();
   }
@@ -239,13 +312,26 @@ window.addEventListener('DOMContentLoaded', ()=>{
     try{ cross.value = 'Custom'; }catch(e){}
     // Recompute deflection D from current F, L, E, I (if possible):
     const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
-    if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
-      const L_m = L_mm/1000;
-      const F_N = F_g * 0.00981;
-      const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
-      const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(1);
-      Dr.value = D.value;
+    // If deflection is at maximum, do not allow decreasing I
+    if (Number(D.value) >= MAX_DEFLECTION_MM && I_v < lastI) {
+      I.value = lastI;
+      Ir.value = I.value;
+    }
+    // If force is at maximum, do not allow increasing I
+    else if (Number(F.value) >= MAX_FORCE_G && I_v > lastI) {
+      I.value = lastI;
+      Ir.value = I.value;
+    } else {
+      if(L_mm>0 && E_GPa>0 && I_v>0 && F_g>0){
+        const L_m = L_mm/1000;
+        const F_N = F_g * 0.00981;
+        const delta_m = F_N * Math.pow(L_m,3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+        const delta_mm = delta_m * 1000;
+        D.value = delta_mm.toFixed(1);
+        Dr.value = D.value;
+      }
+      // commit lastI after a successful change
+      lastI = Number(I.value);
     }
     schedulePlot();
   }
@@ -253,9 +339,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
   // text inputs commit on change/blur
   [L,F,D,E,I].forEach(inp=>{ inp.addEventListener('change', ()=>{ // clamp values to ranges
     const id = inp.id;
-    if (id === 'L') L.value = clamp(L.value, 0, 50);
-    if (id === 'F') F.value = clamp(F.value, 0, 500);
-    if (id === 'D') D.value = clamp(D.value, 0, 50);
+    if (id === 'L') L.value = clamp(L.value, 0, MAX_LENGTH_MM);
+    if (id === 'F') F.value = clamp(F.value, 0, MAX_FORCE_G);
+    if (id === 'D') D.value = clamp(D.value, 0, MAX_DEFLECTION_MM);
     if (id === 'E') E.value = clamp(E.value, 14.5, 207);
     if (id === 'I') I.value = clamp(I.value, 0.13, 10.34);
     // sync ranges
@@ -275,16 +361,31 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const d = MATERIAL_DEFAULT_E[mat.value] || MATERIAL_E_RANGES[mat.value][1];
     E.value = d;
     Er.value = d;
-    // Recompute deflection D based on the newly selected material (E)
-    // so the numeric Deflection field reflects the changed stiffness.
-    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
-    if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
-      const L_m = L_mm / 1000;
-      const F_N = F_g * 0.00981;
-      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
-      const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(1);
-      Dr.value = D.value;
+    // Enforce guards: if deflection is at max, do not allow decreasing E; if force is at max, do not allow increasing E
+    const newE = Number(E.value);
+    if (Number(D.value) >= MAX_DEFLECTION_MM && newE < lastE) {
+      E.value = lastE; Er.value = E.value;
+    } else if (Number(F.value) >= MAX_FORCE_G && newE > lastE) {
+      E.value = lastE; Er.value = E.value;
+    } else {
+      // Recompute deflection D based on the newly selected material (E)
+      // so the numeric Deflection field reflects the changed stiffness.
+      const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+      if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
+        const L_m = L_mm / 1000;
+        const F_N = F_g * 0.00981;
+        const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+        const delta_mm = delta_m * 1000;
+        if (Number(F.value) >= MAX_FORCE_G && delta_mm > lastD) {
+          D.value = String(lastD.toFixed ? lastD.toFixed(1) : lastD);
+          Dr.value = D.value;
+        } else {
+          D.value = delta_mm.toFixed(1);
+          Dr.value = D.value;
+          lastD = Number(D.value);
+        }
+      }
+      lastE = Number(E.value);
     }
     schedulePlot();
   });
@@ -292,16 +393,31 @@ window.addEventListener('DOMContentLoaded', ()=>{
     const v = CROSS_SECTIONS[cross.value];
     I.value = v;
     Ir.value = v;
-    // Recompute deflection D based on the newly selected cross-section (I)
-    // so the numeric Deflection field reflects the changed inertia.
-    const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
-    if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
-      const L_m = L_mm / 1000;
-      const F_N = F_g * 0.00981;
-      const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
-      const delta_mm = delta_m * 1000;
-      D.value = delta_mm.toFixed(1);
-      Dr.value = D.value;
+    // Enforce guards: if deflection is at max, do not allow decreasing I; if force is at max, do not allow increasing I
+    const newI = Number(I.value);
+    if (Number(D.value) >= MAX_DEFLECTION_MM && newI < lastI) {
+      I.value = lastI; Ir.value = I.value;
+    } else if (Number(F.value) >= MAX_FORCE_G && newI > lastI) {
+      I.value = lastI; Ir.value = I.value;
+    } else {
+      // Recompute deflection D based on the newly selected cross-section (I)
+      // so the numeric Deflection field reflects the changed inertia.
+      const L_mm = Number(L.value), E_GPa = Number(E.value), I_v = Number(I.value), F_g = Number(F.value);
+      if (L_mm > 0 && E_GPa > 0 && I_v > 0 && F_g > 0) {
+        const L_m = L_mm / 1000;
+        const F_N = F_g * 0.00981;
+        const delta_m = F_N * Math.pow(L_m, 3) / (3 * E_GPa * 1e9 * I_v * 1e-15);
+        const delta_mm = delta_m * 1000;
+        if (Number(F.value) >= MAX_FORCE_G && delta_mm > lastD) {
+          D.value = String(lastD.toFixed ? lastD.toFixed(1) : lastD);
+          Dr.value = D.value;
+        } else {
+          D.value = delta_mm.toFixed(1);
+          Dr.value = D.value;
+          lastD = Number(D.value);
+        }
+      }
+      lastI = Number(I.value);
     }
     schedulePlot();
   });
@@ -320,7 +436,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
     // ticks and labels
     ctx.fillStyle='#333'; ctx.font='12px Arial'; ctx.textAlign='center';
     const xTicks = 5;
-    for(let i=0;i<=xTicks;i++){ const x = M_LEFT + i*(w-M_LEFT-M_RIGHT)/xTicks; const val = Math.round((i*(50/xTicks))*10)/10; ctx.fillText(val.toString(), x, h-M_BOTTOM+18); ctx.beginPath(); ctx.moveTo(x,h-M_BOTTOM); ctx.lineTo(x,h-M_BOTTOM-4); ctx.strokeStyle='#ddd'; ctx.stroke(); }
+    for(let i=0;i<=xTicks;i++){ const x = M_LEFT + i*(w-M_LEFT-M_RIGHT)/xTicks; const val = Math.round((i*(MAX_LENGTH_MM/xTicks))*10)/10; ctx.fillText(val.toString(), x, h-M_BOTTOM+18); ctx.beginPath(); ctx.moveTo(x,h-M_BOTTOM); ctx.lineTo(x,h-M_BOTTOM-4); ctx.strokeStyle='#ddd'; ctx.stroke(); }
   // x-axis label centered under the ticks
   ctx.font='12px Arial'; ctx.textAlign='center';
   ctx.fillText('L (mm)', M_LEFT + (w-M_LEFT-M_RIGHT)/2, h-M_BOTTOM+36);
@@ -361,11 +477,11 @@ window.addEventListener('DOMContentLoaded', ()=>{
       lw = min_lw + (max_lw - min_lw) * t;
     }catch(e){ lw = 3; }
     ctx.beginPath(); ctx.lineWidth = lw; ctx.strokeStyle = mapEtoColor(E_GPa);
-  for(let i=0;i<data.x.length;i++){ const px = originX + (data.x[i]/50)*plotW; const py = originY - (data.y[i]/Math.max(maxY,30))*plotH; if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
+  for(let i=0;i<data.x.length;i++){ const px = originX + (data.x[i]/MAX_LENGTH_MM)*plotW; const py = originY - (data.y[i]/Math.max(maxY,30))*plotH; if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py); }
   ctx.stroke();
     // annotate max (keep label inside canvas)
     const idx = data.y.indexOf(Math.max(...data.y));
-    const mx = originX + (data.x[idx]/50)*plotW;
+    const mx = originX + (data.x[idx]/MAX_LENGTH_MM)*plotW;
     const my = originY - (data.y[idx]/Math.max(maxY,30))*plotH;
     if (F_g > 0) {
       const forceText = `${Number(F_g).toFixed(1)} g`;
@@ -431,7 +547,14 @@ window.addEventListener('DOMContentLoaded', ()=>{
 
   // Reset
   document.getElementById('reset').addEventListener('click', ()=>{
-    L.value = Lr.value = 0.0; F.value = Fr.value = 0.0; D.value = Dr.value = 0.0; mat.value='Stainless Steel'; E.value = Er.value = MATERIAL_DEFAULT_E['Stainless Steel']; cross.value='0.016 Round'; I.value = Ir.value = CROSS_SECTIONS['0.016 Round']; schedulePlot();
+    L.value = Lr.value = 0.0; F.value = Fr.value = 0.0; D.value = Dr.value = 0.0; mat.value='Stainless Steel'; E.value = Er.value = MATERIAL_DEFAULT_E['Stainless Steel']; cross.value='0.016 Round'; I.value = Ir.value = CROSS_SECTIONS['0.016 Round'];
+    // commit last-tracked values to match reset
+    lastF = Number(F.value);
+    lastD = Number(D.value);
+    lastE = Number(E.value);
+    lastI = Number(I.value);
+    lastL = Number(L.value);
+    schedulePlot();
   });
 
   // initial draw
